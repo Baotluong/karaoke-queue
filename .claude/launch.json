@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "karaoke-fake-tv",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["KQ_FAKE_TV=1", "KQ_FAKE_SONG_SECONDS=15", "KQ_DB=dev.db", ".venv/bin/uvicorn", "app.main:create_app", "--factory", "--port", "8765"],
+      "port": 8765
+    }
+  ]
+}

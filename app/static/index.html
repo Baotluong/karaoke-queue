@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Karaoke Queue</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>🎤 Karaoke Queue</h1>
+  <span id="tv-status" class="pill">TV…</span>
+</header>
+
+<main>
+  <section id="join" hidden>
+    <h2>Who's singing?</h2>
+    <form id="join-form">
+      <input id="name" maxlength="40" placeholder="Your name" autocomplete="nickname" required>
+      <button>Join</button>
+    </form>
+  </section>
+
+  <section id="now">
+    <h2>Now playing</h2>
+    <div id="now-card" class="empty">Nothing playing yet</div>
+  </section>
+
+  <section id="add" hidden>
+    <h2>Add a song <small id="me"></small></h2>
+    <form id="search-form">
+      <input id="q" placeholder="Song or artist" autocomplete="off" required>
+      <button>Search</button>
+    </form>
+    <p id="search-msg" class="msg"></p>
+    <ul id="results" class="list"></ul>
+  </section>
+
+  <section>
+    <h2>Up next <small id="count"></small></h2>
+    <ol id="queue" class="list"></ol>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

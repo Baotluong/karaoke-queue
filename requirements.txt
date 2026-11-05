@@ -1,2 +1,5 @@
 pyytlounge>=3.6
 certifi
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-dotenv>=1.0

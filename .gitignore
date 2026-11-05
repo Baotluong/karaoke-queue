@@ -4,3 +4,4 @@ __pycache__/
 .lounge_auth.json
 .env
 *.db
+*.db-journal
