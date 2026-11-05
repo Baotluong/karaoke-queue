@@ -102,3 +102,16 @@ dialog.invite h2 { font-size: 20px; text-transform: none; letter-spacing: 0; col
 dialog.invite .qr { width: min(320px, 78vw); }
 dialog.invite .row button { background: var(--line); color: var(--text); }
 dialog.invite .row button.go { background: var(--accent); color: #fff; }
+.notice { display: flex; align-items: center; gap: 10px; }
+.notice span { flex: 1; }
+.notice button { background: transparent; color: var(--warn); padding: 4px 8px; }
+.setting input#pair-code { flex: 0 0 8.5em; padding: 8px; }
+
+/* --- your turn ------------------------------------------------------------- */
+.turn-banner {
+  margin: 12px 0; padding: 14px 16px; border-radius: 12px; font-weight: 700; font-size: 17px;
+  background: color-mix(in srgb, var(--accent) 22%, var(--card)); border: 1px solid var(--accent);
+}
+.turn-banner.on { background: var(--accent); color: #fff; animation: pulse 1.2s ease-in-out 3; }
+@keyframes pulse { 50% { transform: scale(1.03); } }
+#alerts-btn { background: var(--line); color: var(--text); margin-bottom: 8px; }

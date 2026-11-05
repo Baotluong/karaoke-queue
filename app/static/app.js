@@ -4,8 +4,66 @@ let canSearch = false;
 
 const isMine = (song) => !!me && song.singer_id === me.id;
 
+// --- "You're up next" alerts -------------------------------------------------
+
+const PAGE_TITLE = document.title;
+let lastAlert = null;
+let turnInitialized = false; // first render after opening the page: show, don't buzz
+
+async function systemNotify(text) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  try {
+    new Notification("Karaoke", { body: text, tag: "kq-turn" });
+  } catch {
+    // Android Chrome only allows notifications from a service worker.
+    const reg = await navigator.serviceWorker?.getRegistration("/static/");
+    reg?.showNotification("Karaoke", { body: text, tag: "kq-turn" });
+  }
+}
+
+function renderTurn(state) {
+  const now = state.now_playing && isMine(state.now_playing) ? state.now_playing : null;
+  const next = !now && state.upcoming[0] && isMine(state.upcoming[0]) ? state.upcoming[0] : null;
+  const banner = $("#turn-banner");
+  const song = now || next;
+  const quiet = !turnInitialized;
+  if (me) turnInitialized = true; // the first render may come before we know who "me" is
+  if (!song) {
+    banner.hidden = true;
+    document.title = PAGE_TITLE;
+    lastAlert = null;
+    return;
+  }
+  const text = now ? `🎤 You're on! "${song.title}"` : `🎤 You're up next: "${song.title}". Get the mic ready!`;
+  banner.textContent = text;
+  banner.className = "turn-banner" + (now ? " on" : "");
+  banner.hidden = false;
+  document.title = now ? "🎤 You're on!" : "🎤 You're next!";
+
+  const key = `${song.id}:${now ? "now" : "next"}`;
+  if (key === lastAlert) return;
+  lastAlert = key;
+  if (quiet) return; // don't buzz just for opening the page
+  navigator.vibrate?.(now ? [300, 100, 300] : [200, 100, 200]);
+  if (document.hidden) systemNotify(text);
+}
+
+function updateAlertsButton() {
+  const btn = $("#alerts-btn");
+  // Needs HTTPS (the tunnel link); iPhones only allow it for home-screen web apps.
+  btn.hidden = !(me && window.isSecureContext && "Notification" in window && Notification.permission === "default");
+}
+
+$("#alerts-btn").addEventListener("click", async () => {
+  await navigator.serviceWorker?.register("/static/sw.js").catch(() => {});
+  await Notification.requestPermission();
+  updateAlertsButton();
+});
+
 function render(state) {
   renderTv(state.tv);
+  renderTurn(state);
+  renderNotices(state.notices, (n) => isMine(n));
   renderNow(state.now_playing, state.now_playing && isMine(state.now_playing));
 
   const q = $("#queue");
@@ -41,6 +99,7 @@ function removeButton(song) {
 }
 
 function showJoined() {
+  updateAlertsButton();
   $("#join").hidden = !!me;
   $("#add").hidden = !me;
   $("#me").textContent = me ? `as ${me.name}` : "";

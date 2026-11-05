@@ -27,17 +27,16 @@
 
   <div id="panel" hidden>
     <section>
-      <h2>Party link</h2>
+      <h2>Party access</h2>
       <p id="local-warning" class="warn-box" hidden>
-        This link only works on your Wi-Fi. To let people join from anywhere, start the
+        The invite link only works on your Wi-Fi. To let people join from anywhere, start the
         party with <code>python party.py</code>.
       </p>
-      <div id="join-url" class="join-url"></div>
-      <div class="row" style="justify-content: center">
-        <button id="show-qr" class="go">📲 Show QR code</button>
+      <div class="setting">
+        <span><b>New link</b><br>Old QR codes stop working; everyone scans the new one.</span>
         <button id="new-link" class="danger">New link</button>
       </div>
-      <label class="setting" style="margin-top: 10px">
+      <label class="setting">
         <input id="party-open" type="checkbox">
         <span><b>Open to new songs</b><br>Off: nobody can join or add songs. The queue keeps playing.</span>
       </label>
@@ -54,6 +53,7 @@
     </section>
 
     <p id="msg" class="msg"></p>
+    <div id="notices"></div>
 
     <section>
       <h2>Up next <small id="count"></small></h2>
@@ -70,6 +70,18 @@
         <input id="max-waiting" type="number" min="0" max="50" inputmode="numeric">
         <label for="max-waiting"><b>Max songs waiting per person</b><br>0 = no limit</label>
         <button>Save</button>
+      </form>
+    </section>
+
+    <section>
+      <h2>TV</h2>
+      <div class="setting">
+        <span><b id="tv-name">…</b><br><span id="tv-detail"></span></span>
+      </div>
+      <form id="pair-form" class="setting">
+        <input id="pair-code" inputmode="numeric" autocomplete="off" placeholder="TV code">
+        <label for="pair-code"><b>Pair a TV</b><br>On the TV: YouTube → Settings → Link with TV code</label>
+        <button>Pair</button>
       </form>
     </section>
 

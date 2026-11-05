@@ -84,6 +84,10 @@ class SettingsBody(BaseModel):
     fair_turns: bool | None = None
 
 
+class PairBody(BaseModel):
+    code: str
+
+
 class PartyBody(BaseModel):
     open: bool | None = None
     new_link: bool = False
@@ -114,11 +118,12 @@ def create_app(settings: Settings | None = None, screen: Screen | None = None) -
     request_limit = RateLimiter(20, 10 * 60)
 
     def public_state() -> dict:
-        return {**store.snapshot(), "tv": screen.status(), **store.settings()}
+        return {**store.snapshot(), "tv": screen.status(), **store.settings(), "notices": player.notices()}
 
     hub.state_fn = public_state
     store.on_change(hub.notify)
     screen.on_status = hub.notify
+    player.on_notice = hub.notify
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -314,6 +319,17 @@ def create_app(settings: Settings | None = None, screen: Screen | None = None) -
                     await client.close(code=4403)
         return {"join_url": join_url(request), "open": store.party_open, "public": bool(settings.public_url)}
 
+
+    @app.post("/api/admin/tv/pair", dependencies=admin)
+    async def admin_pair_tv(body: PairBody):
+        try:
+            ok = await screen.pair(body.code)
+        except NotImplementedError:
+            ok = False
+        if not ok:
+            raise HTTPException(400, "Pairing failed. Check the code; TV codes expire after a few minutes.")
+        hub.notify()
+        return {"ok": True}
 
     @app.post("/api/admin/skip", dependencies=admin)
     async def admin_skip():

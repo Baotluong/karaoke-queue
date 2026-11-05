@@ -13,9 +13,8 @@ python3 -m venv .venv
 
 ## Run a party
 
-1. Pair with the TV once (see Phase 0 below). This saves `.lounge_auth.json`.
-2. Install Cloudflare's tunnel tool once: `brew install cloudflared`
-3. Start the party:
+1. Install Cloudflare's tunnel tool once: `brew install cloudflared`
+2. Start the party:
    ```bash
    .venv/bin/python party.py
    ```
@@ -23,8 +22,21 @@ python3 -m venv .venv
    code. Guests scan it from anywhere (Wi-Fi not needed). The tunnel address is
    new each time you start it, so the QR code is too.
    Use `party.py --local` for Wi-Fi-only, without a tunnel.
+3. Pair the TV once on the admin page (TV section). This saves `.lounge_auth.json`.
 4. Anyone in the party can tap **📲 Invite** to show the QR code full-screen, copy
    the link or share it. Admins also have **Show QR code** on the admin page.
+
+### During the party
+
+- **Your turn:** a guest's page shows "You're up next" / "You're on!" (and the
+  browser tab title changes), and Android phones vibrate. With **🔔 Notify me**
+  (over the tunnel's HTTPS link) they also get a notification while the page is
+  in the background. Alerts need the page open; a locked phone may not get them,
+  and iPhones only allow notifications for home-screen web apps.
+- **Songs that won't play** (removed, region-blocked, age-restricted) are skipped
+  automatically after 30 seconds; the singer and admins see a notice.
+- **Pair the TV** from the TV section of the admin page (TV: YouTube → Settings →
+  Link with TV code). No terminal needed.
 
 ### Keeping strangers out
 
@@ -95,4 +107,4 @@ command fakes a TV whose songs last 15 seconds.
 - **Phase 2:** admin PIN, reorder, skip, remove, block, optional approval
 - **Phase 3:** round-robin fairness, per-singer limits, no duplicate songs
 - **Phase 4:** public access via Cloudflare tunnel: party QR link, new link, open/closed, rate limits, search cache, admin lockouts
-- **Phase 5:** party polish
+- **Phase 5:** stuck-song watchdog, your-turn alerts, pair TV from the admin page

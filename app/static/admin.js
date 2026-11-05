@@ -68,6 +68,12 @@ function render(state) {
   $("#count").textContent = total ? `(${total})` : "";
 
   if (state.singers) renderSingers(state.singers);
+  renderNotices(state.notices);
+  const tv = state.tv || {};
+  $("#tv-name").textContent = tv.ready ? `Connected: ${tv.name || "TV"}` : "Not connected";
+  $("#tv-detail").textContent = tv.ready
+    ? (tv.paused ? "Paused" : "Ready")
+    : tv.error || "Open the YouTube app on the TV";
   $("#fair-turns").checked = !!state.fair_turns;
   $("#party-open").checked = state.party_open !== false;
   const input = $("#max-waiting");
@@ -106,7 +112,6 @@ function renderSingers(singers) {
 }
 
 function renderParty(p) {
-  $("#join-url").textContent = p.join_url;
   $("#party-open").checked = p.open;
   $("#local-warning").hidden = p.public;
 }
@@ -159,7 +164,6 @@ $("#fair-turns").addEventListener("change", async (e) => {
 });
 
 $("#invite-btn").addEventListener("click", showInvite);
-$("#show-qr").addEventListener("click", showInvite);
 
 $("#new-link").addEventListener("click", async () => {
   if (!confirm("Make a new party link? Everyone will need to scan the new QR code to keep using the queue.")) return;
@@ -179,6 +183,18 @@ $("#party-open").addEventListener("change", async (e) => {
   } catch (err) {
     flash(err.message, true);
   }
+});
+
+$("#pair-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = e.submitter;
+  btn.disabled = true;
+  flash("Pairing…");
+  if (await act("/api/admin/tv/pair", { body: JSON.stringify({ code: $("#pair-code").value }) })) {
+    $("#pair-code").value = "";
+    flash("Paired! Connecting to the TV…");
+  }
+  btn.disabled = false;
 });
 
 $("#pause").addEventListener("click", () => act("/api/admin/pause"));

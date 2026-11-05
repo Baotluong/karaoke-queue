@@ -132,3 +132,31 @@ async function showInvite() {
     if (err.status === 403) lostPartyAccess();
   }
 }
+
+// --- notices (e.g. "your song wouldn't play and was skipped") -----------------
+
+const dismissedNotices = new Set(JSON.parse(localStorage.getItem("kq_dismissed") || "[]"));
+
+function renderNotices(notices, filter = () => true) {
+  const box = $("#notices");
+  if (!box) return;
+  const shown = (notices || []).filter((n) => filter(n) && !dismissedNotices.has(n.id));
+  box.replaceChildren(
+    ...shown.map((n) =>
+      el(
+        "div",
+        { class: "warn-box notice" },
+        el("span", {}, n.text),
+        el("button", {
+          class: "small",
+          title: "Dismiss",
+          onclick: () => {
+            dismissedNotices.add(n.id);
+            localStorage.setItem("kq_dismissed", JSON.stringify([...dismissedNotices].slice(-50)));
+            renderNotices(notices, filter);
+          },
+        }, "✕"),
+      ),
+    ),
+  );
+}

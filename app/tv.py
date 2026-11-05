@@ -2,7 +2,8 @@
 
 LoungeScreen talks to the real YouTube TV app over the Lounge API and keeps
 the connection alive. FakeScreen pretends to be a TV for development and tests.
-Both call `on_ended(video_id)` when a video finishes.
+Both call `on_started(video_id)` once a video actually starts playing and
+`on_ended(video_id)` when it finishes.
 """
 
 from __future__ import annotations
@@ -26,7 +27,12 @@ class Screen:
     """Interface the player uses."""
 
     on_ended: EndedCallback | None = None
+    on_started: Callable[[str], None] | None = None
     on_status: Callable[[], None] | None = None  # connection or pause state changed
+
+    def _video_started(self, video_id: str) -> None:
+        if self.on_started:
+            self.on_started(video_id)
 
     def _status_changed(self) -> None:
         if self.on_status:
@@ -47,6 +53,10 @@ class Screen:
     async def resume(self) -> bool:
         raise NotImplementedError
 
+    async def pair(self, code: str) -> bool:
+        """Link to a TV using the code from its 'Link with TV code' screen."""
+        raise NotImplementedError
+
     def status(self) -> dict:
         return {"ready": self.ready}
 
@@ -54,8 +64,10 @@ class Screen:
 class FakeScreen(Screen):
     """A pretend TV. Songs end after `song_seconds`, or when `finish()` is called."""
 
-    def __init__(self, song_seconds: float | None = None) -> None:
+    def __init__(self, song_seconds: float | None = None, broken: set[str] | None = None) -> None:
         self.song_seconds = song_seconds
+        self.broken = broken or set()  # video IDs that never start (like a blocked video)
+        self.paired_code: str | None = None
         self.played: list[str] = []
         self.current: str | None = None
         self.paused = False
@@ -70,9 +82,20 @@ class FakeScreen(Screen):
         self.current = video_id
         if self._timer:
             self._timer.cancel()
+        if video_id in self.broken:
+            log.info("[fake tv] %s won't play", video_id)
+            return True
+        self._video_started(video_id)
         if self.song_seconds is not None:
             self._timer = asyncio.create_task(self._auto_end(video_id))
         log.info("[fake tv] playing %s", video_id)
+        return True
+
+    async def pair(self, code: str) -> bool:
+        code = code.replace(" ", "")
+        if not (code.isdigit() and len(code) == 12):
+            return False
+        self.paired_code = code
         return True
 
     async def pause(self) -> bool:
@@ -160,6 +183,25 @@ class LoungeScreen(Screen):
             except (asyncio.CancelledError, Exception):
                 pass
 
+    async def pair(self, code: str) -> bool:
+        """Pair with a (new) TV, save the login, and reconnect to it."""
+        code = "".join(ch for ch in code if ch.isdigit())
+        lib_log = logging.getLogger("pyytlounge")
+        async with YtLoungeApi(self.device_name, logger=lib_log) as api:
+            try:
+                ok = await api.pair(code)
+            except Exception:  # bad or expired codes come back as an HTML 404
+                log.debug("pairing failed", exc_info=True)
+                ok = False
+            if not ok:
+                return False
+            self.auth_file.write_text(json.dumps(api.store_auth_state(), indent=2))
+        log.info("Paired with a TV; reconnecting")
+        await self.stop()  # drop the old connection and start fresh with the new login
+        self.api = None
+        await self.start()
+        return True
+
     async def _run(self) -> None:
         """Connect, listen for events, and reconnect forever."""
         lib_log = logging.getLogger("pyytlounge")
@@ -181,7 +223,7 @@ class LoungeScreen(Screen):
 
     async def _connect_once(self, api: YtLoungeApi) -> None:
         if not self.auth_file.exists():
-            self._last_error = "Not paired. Run: python spike/ad_check.py pair"
+            self._last_error = "Not paired. Pair the TV on the admin page."
             return
         if not api.linked():
             api.load_auth_state(json.loads(self.auth_file.read_text()))
@@ -219,8 +261,10 @@ class LoungeScreen(Screen):
             self._status_changed()
         if not self._expected or self._tv_video != self._expected:
             return
-        if state == State.Playing:
+        if state in (State.Playing, State.Advertisement) and not self._seen_playing:
             self._seen_playing = True
+            self._video_started(self._expected)
+        if state == State.Playing:
             near_end = bool(duration and current is not None and current >= duration - 0.5)
             if not near_end:
                 return
