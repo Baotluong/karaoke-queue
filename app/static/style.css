@@ -81,3 +81,24 @@ button.go { background: var(--accent); color: #fff; }
 .setting input[type=checkbox] { flex: none; width: 22px; height: 22px; accent-color: var(--accent); }
 .setting input[type=number] { flex: 0 0 4em; padding: 8px; text-align: center; }
 .setting button { padding: 6px 12px; font-size: 14px; }
+
+/* --- party gate & QR ------------------------------------------------------ */
+.gate { text-align: center; padding-top: 15vh; }
+.gate-icon { font-size: 64px; }
+.gate h2 { font-size: 22px; text-transform: none; letter-spacing: 0; color: var(--text); }
+.qr { display: block; width: min(280px, 80vw); margin: 0 auto 12px; background: #fff; border-radius: 12px; padding: 8px; }
+.join-url { word-break: break-all; text-align: center; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+.warn-box { background: color-mix(in srgb, var(--warn) 15%, var(--card)); color: var(--warn); padding: 10px 12px; border-radius: 10px; font-size: 14px; margin-bottom: 8px; }
+
+/* --- invite pop-up ---------------------------------------------------------- */
+.header-right { display: flex; align-items: center; gap: 8px; }
+header button.small { padding: 6px 10px; font-size: 13px; }
+dialog.invite {
+  width: min(420px, 92vw); padding: 20px; border: 1px solid var(--line); border-radius: 16px;
+  background: var(--card); color: var(--text); text-align: center;
+}
+dialog.invite::backdrop { background: rgb(0 0 0 / 70%); }
+dialog.invite h2 { font-size: 20px; text-transform: none; letter-spacing: 0; color: var(--text); margin-bottom: 14px; }
+dialog.invite .qr { width: min(320px, 78vw); }
+dialog.invite .row button { background: var(--line); color: var(--text); }
+dialog.invite .row button.go { background: var(--accent); color: #fff; }

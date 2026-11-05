@@ -218,7 +218,33 @@ class Store:
         self._set_setting("fair_turns", "1" if on else "0")
 
     def settings(self) -> dict:
-        return {"max_waiting": self.max_waiting, "fair_turns": self.fair_turns}
+        return {"max_waiting": self.max_waiting, "fair_turns": self.fair_turns, "party_open": self.party_open}
+
+    # --- party access ----------------------------------------------------------
+
+    _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L
+
+    @property
+    def join_code(self) -> str:
+        """Secret code in the party's join link / QR code. Created on first use."""
+        code = self._get_setting("join_code")
+        if code is None:
+            code = self.rotate_join_code()
+        return code
+
+    def rotate_join_code(self) -> str:
+        """New join link; everyone who joined with the old one must scan again."""
+        code = "".join(secrets.choice(self._CODE_ALPHABET) for _ in range(8))
+        self._set_setting("join_code", code)
+        return code
+
+    @property
+    def party_open(self) -> bool:
+        """Closed: nobody new can join and nobody can add songs (the queue keeps playing)."""
+        return self._get_setting("party_open") != "0"
+
+    def set_party_open(self, open_: bool) -> None:
+        self._set_setting("party_open", "1" if open_ else "0")
 
     # --- queue ---------------------------------------------------------------
 

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Karaoke Queue</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>🎤 Karaoke Queue</h1>
+</header>
+<main class="gate">
+  <div class="gate-icon">📷</div>
+  <h2 id="title">Scan the QR code to join</h2>
+  <p id="body" class="msg">This karaoke queue is for people at the party. Ask the host for the QR code and scan it with your phone's camera.</p>
+</main>
+<footer><a href="/admin">Admin</a></footer>
+<script>
+  if (new URLSearchParams(location.search).has("expired")) {
+    document.getElementById("title").textContent = "That link has expired";
+    document.getElementById("body").textContent =
+      "The host made a new party link. Ask them for the current QR code and scan it again.";
+  }
+</script>
+</body>
+</html>

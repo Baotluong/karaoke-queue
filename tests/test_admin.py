@@ -11,6 +11,7 @@ from app.main import create_app
 from app.search import Searcher
 from app.store import Store, Video
 from app.tv import FakeScreen
+from conftest import scan_qr
 
 PIN = "4321"
 
@@ -91,6 +92,7 @@ def client(monkeypatch):
     tv = FakeScreen()
     app = create_app(Settings(db_path=":memory:", admin_pin=PIN), screen=tv)
     with TestClient(app) as c:
+        scan_qr(c)
         c.tv, c.store = tv, app.state.store
         yield c
 
@@ -115,6 +117,7 @@ class Guest:
     def _as_me(self):
         saved = dict(self.client.cookies)
         self.client.cookies.clear()
+        self.client.cookies.set("kq_party", saved["kq_party"])
         if self.token:
             self.client.cookies.set("kq_token", self.token)
         try:

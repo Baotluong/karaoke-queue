@@ -19,6 +19,7 @@ class Settings:
     fake_tv: bool = False
     fake_song_seconds: float = 20.0
     admin_pin: str | None = None
+    public_url: str | None = None  # e.g. the Cloudflare tunnel URL, used in the QR code
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -30,4 +31,5 @@ class Settings:
             fake_tv=os.getenv("KQ_FAKE_TV", "").lower() in ("1", "true", "yes"),
             fake_song_seconds=float(os.getenv("KQ_FAKE_SONG_SECONDS", cls.fake_song_seconds)),
             admin_pin=os.getenv("KQ_ADMIN_PIN") or None,
+            public_url=(os.getenv("KQ_PUBLIC_URL") or "").rstrip("/") or None,
         )

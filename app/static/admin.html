@@ -9,7 +9,10 @@
 <body>
 <header>
   <h1>🎛️ Karaoke Admin</h1>
-  <span id="tv-status" class="pill">TV…</span>
+  <div class="header-right">
+    <button id="invite-btn" class="small" hidden>📲 Invite</button>
+    <span id="tv-status" class="pill">TV…</span>
+  </div>
 </header>
 
 <main>
@@ -23,6 +26,23 @@
   </section>
 
   <div id="panel" hidden>
+    <section>
+      <h2>Party link</h2>
+      <p id="local-warning" class="warn-box" hidden>
+        This link only works on your Wi-Fi. To let people join from anywhere, start the
+        party with <code>python party.py</code>.
+      </p>
+      <div id="join-url" class="join-url"></div>
+      <div class="row" style="justify-content: center">
+        <button id="show-qr" class="go">📲 Show QR code</button>
+        <button id="new-link" class="danger">New link</button>
+      </div>
+      <label class="setting" style="margin-top: 10px">
+        <input id="party-open" type="checkbox">
+        <span><b>Open to new songs</b><br>Off: nobody can join or add songs. The queue keeps playing.</span>
+      </label>
+    </section>
+
     <section>
       <h2>Now playing</h2>
       <div id="now-card" class="empty">Nothing playing yet</div>

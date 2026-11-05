@@ -6,6 +6,7 @@ from app.main import create_app
 from app.search import Searcher
 from app.store import QueueRuleError, Store, Video
 from app.tv import FakeScreen
+from conftest import scan_qr
 
 
 def vid(tag: str) -> Video:
@@ -126,6 +127,7 @@ def test_api_reports_place_and_rule_errors(monkeypatch):
     monkeypatch.setattr(Searcher, "lookup", fake_lookup)
     app = create_app(Settings(db_path=":memory:", admin_pin="9999"), screen=OfflineTV())
     with TestClient(app) as c:
+        scan_qr(c)
         c.post("/api/join", json={"name": "Ana"})
         assert c.get("/api/state").json()["max_waiting"] == 3
 
@@ -196,6 +198,7 @@ def test_api_guest_remove_and_fair_turns_setting(monkeypatch):
     monkeypatch.setattr(Searcher, "lookup", fake_lookup)
     app = create_app(Settings(db_path=":memory:", admin_pin="9999"), screen=OfflineTV())
     with TestClient(app) as c:
+        scan_qr(c)
         store = app.state.store
         ben = store.join("Ben")
         b1 = store.add(ben, vid("B1"))
@@ -205,7 +208,7 @@ def test_api_guest_remove_and_fair_turns_setting(monkeypatch):
         assert c.delete(f"/api/requests/{b1.id}").status_code == 404  # Ben's song
         assert c.delete(f"/api/requests/{mine['id']}").status_code == 200
         assert [r.title for r in store.upcoming()] == ["B1"]
-        c.cookies.clear()
+        c.cookies.delete("kq_token")
         assert c.delete(f"/api/requests/{b1.id}").status_code == 401  # not joined
 
         assert c.get("/api/state").json()["fair_turns"] is True

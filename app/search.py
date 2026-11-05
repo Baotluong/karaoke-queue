@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import re
+import time
 from urllib.parse import parse_qs, urlparse
 
 import aiohttp
@@ -41,10 +42,17 @@ def extract_video_id(text: str) -> str | None:
     return candidate if candidate and _ID_RE.match(candidate) else None
 
 
+CACHE_SECONDS = 6 * 60 * 60
+CACHE_MAX = 500
+
+
 class Searcher:
     def __init__(self, api_key: str | None, session: aiohttp.ClientSession) -> None:
         self.api_key = api_key
         self.session = session
+        # Each YouTube search costs ~1% of the free daily quota, and party guests
+        # search for the same songs a lot, so remember recent results.
+        self._cache: dict[str, tuple[float, list[Video]]] = {}
 
     @property
     def can_search(self) -> bool:
@@ -74,6 +82,10 @@ class Searcher:
             raise SearchError("Search isn't set up yet. Paste a YouTube link instead.")
         if "karaoke" not in query.lower():
             query += " karaoke"
+        key = " ".join(query.lower().split())
+        hit = self._cache.get(key)
+        if hit and time.time() - hit[0] < CACHE_SECONDS:
+            return hit[1]
         params = {
             "part": "snippet",
             "type": "video",
@@ -98,4 +110,7 @@ class Searcher:
                     thumbnail=sn.get("thumbnails", {}).get("medium", {}).get("url", ""),
                 )
             )
+        if len(self._cache) >= CACHE_MAX:
+            self._cache.pop(next(iter(self._cache)))  # drop the oldest
+        self._cache[key] = (time.time(), results)
         return results

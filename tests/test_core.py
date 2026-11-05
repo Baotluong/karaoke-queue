@@ -9,6 +9,7 @@ from app.player import Player
 from app.search import Searcher, extract_video_id
 from app.store import Store, Video
 from app.tv import FakeScreen
+from conftest import scan_qr
 
 
 def vid(n: int) -> Video:
@@ -140,6 +141,7 @@ def client(monkeypatch):
     tv = FakeScreen()
     app = create_app(Settings(db_path=":memory:", yt_api_key=None), screen=tv)
     with TestClient(app) as c:
+        scan_qr(c)
         c.tv = tv
         yield c
 

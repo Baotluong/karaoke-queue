@@ -18,6 +18,7 @@ function render(state) {
   $("#count").textContent = state.upcoming.length ? `(${state.upcoming.length})` : "";
 
   const limit = state.max_waiting;
+  $("#closed").hidden = state.party_open !== false;
   $("#rules").textContent =
     (state.fair_turns ? "Everyone takes turns." : "Songs play in the order they're added.") +
     (limit ? ` Up to ${limit} song${limit === 1 ? "" : "s"} waiting per person.` : "");
@@ -47,7 +48,13 @@ function showJoined() {
 }
 
 async function loadState() {
-  const state = await api("/api/state");
+  let state;
+  try {
+    state = await api("/api/state");
+  } catch (err) {
+    if (err.status === 403) lostPartyAccess();
+    throw err;
+  }
   me = state.me;
   canSearch = state.can_search;
   showJoined();
@@ -98,6 +105,8 @@ async function addSong(video, btn) {
     if (err.status === 401) { me = null; showJoined(); }
   }
 }
+
+$("#invite-btn").addEventListener("click", showInvite);
 
 loadState().catch(console.error);
 liveUpdates(render, () => loadState().catch(() => {}));

@@ -11,15 +11,34 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
 ```
 
-## Run it
+## Run a party
 
 1. Pair with the TV once (see Phase 0 below). This saves `.lounge_auth.json`.
-2. Start the server so phones on your Wi-Fi can reach it:
+2. Install Cloudflare's tunnel tool once: `brew install cloudflared`
+3. Start the party:
    ```bash
-   .venv/bin/uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000
+   .venv/bin/python party.py
    ```
-3. Guests open `http://<this computer's IP>:8000` on their phones.
-   On a Mac: `ipconfig getifaddr en0` shows the IP.
+   This starts the server and a free Cloudflare quick tunnel, then prints a QR
+   code. Guests scan it from anywhere (Wi-Fi not needed). The tunnel address is
+   new each time you start it, so the QR code is too.
+   Use `party.py --local` for Wi-Fi-only, without a tunnel.
+4. Anyone in the party can tap **📲 Invite** to show the QR code full-screen, copy
+   the link or share it. Admins also have **Show QR code** on the admin page.
+
+### Keeping strangers out
+
+- Every guest page needs the **party link** (the QR code). Without it people see
+  "Scan the QR code to join".
+- **New link** on the admin page makes a new QR code; anyone using the old link
+  is locked out at once and must scan again.
+- **Open to new songs** off: nobody can join or add songs; the queue keeps playing.
+- Rate limits per guest (by real IP, also through the tunnel): 5 joins, 20
+  searches and 20 song requests per 10 minutes. Searches are cached for 6 hours
+  to save YouTube quota.
+- Admin login locks a device out after 5 wrong tries, and locks all logins for a
+  while after 30 wrong tries overall. Use a PIN of 6+ characters.
+- Cookies are HTTPS-only when the page came through the tunnel.
 
 Admins open `http://<IP>:8000/admin` and enter the PIN to skip, pause/resume,
 reorder, remove, play a song now, or block a singer (which also removes their
@@ -46,6 +65,7 @@ command fakes a TV whose songs last 15 seconds.
 |---|---|---|
 | `YT_API_KEY` | none | YouTube Data API key. Without it, guests paste YouTube links instead of searching. |
 | `KQ_ADMIN_PIN` | random each run (printed in the log) | PIN for the admin page at `/admin` |
+| `KQ_PUBLIC_URL` | set by `party.py` | Address used in the QR code |
 | `KQ_DB` | `karaoke.db` | SQLite database file |
 | `KQ_FAKE_TV` | off | Use a pretend TV |
 | `KQ_FAKE_SONG_SECONDS` | `20` | Song length on the fake TV |
@@ -74,5 +94,5 @@ command fakes a TV whose songs last 15 seconds.
 - **Phase 1:** FastAPI + SQLite web app: guest search and request, live queue, player loop
 - **Phase 2:** admin PIN, reorder, skip, remove, block, optional approval
 - **Phase 3:** round-robin fairness, per-singer limits, no duplicate songs
-- **Phase 4:** house-only access: nightly join code, per-device cookie
+- **Phase 4:** public access via Cloudflare tunnel: party QR link, new link, open/closed, rate limits, search cache, admin lockouts
 - **Phase 5:** party polish

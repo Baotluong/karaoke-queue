@@ -6,6 +6,7 @@ function showLoggedIn(yes) {
   $("#login").hidden = yes;
   $("#panel").hidden = !yes;
   $("#logout-wrap").hidden = !yes;
+  $("#invite-btn").hidden = !yes;
 }
 
 function flash(text, isErr = false) {
@@ -68,6 +69,7 @@ function render(state) {
 
   if (state.singers) renderSingers(state.singers);
   $("#fair-turns").checked = !!state.fair_turns;
+  $("#party-open").checked = state.party_open !== false;
   const input = $("#max-waiting");
   if (document.activeElement !== input) input.value = state.max_waiting;
 }
@@ -103,9 +105,20 @@ function renderSingers(singers) {
   if (!singers.length) box.append(el("div", { class: "item empty" }, "No one has joined yet"));
 }
 
+function renderParty(p) {
+  $("#join-url").textContent = p.join_url;
+  $("#party-open").checked = p.open;
+  $("#local-warning").hidden = p.public;
+}
+
+async function loadParty() {
+  renderParty(await api("/api/admin/party"));
+}
+
 async function load() {
   try {
     render(await api("/api/admin/state"));
+    if (!loggedIn) await loadParty();
     showLoggedIn(true);
   } catch (err) {
     if (err.status === 401) showLoggedIn(false);
@@ -142,6 +155,29 @@ $("#settings-form").addEventListener("submit", async (e) => {
 $("#fair-turns").addEventListener("change", async (e) => {
   if (await act("/api/admin/settings", { body: JSON.stringify({ fair_turns: e.target.checked }) })) {
     flash(e.target.checked ? "Fair turns on" : "Fair turns off: new songs go to the bottom");
+  }
+});
+
+$("#invite-btn").addEventListener("click", showInvite);
+$("#show-qr").addEventListener("click", showInvite);
+
+$("#new-link").addEventListener("click", async () => {
+  if (!confirm("Make a new party link? Everyone will need to scan the new QR code to keep using the queue.")) return;
+  try {
+    renderParty(await api("/api/admin/party", { method: "POST", body: JSON.stringify({ new_link: true }) }));
+    flash("New link ready.");
+    showInvite();
+  } catch (err) {
+    flash(err.message, true);
+  }
+});
+
+$("#party-open").addEventListener("change", async (e) => {
+  try {
+    renderParty(await api("/api/admin/party", { method: "POST", body: JSON.stringify({ open: e.target.checked }) }));
+    flash(e.target.checked ? "Open to new songs" : "Closed: no new singers or songs");
+  } catch (err) {
+    flash(err.message, true);
   }
 });
 
