@@ -74,3 +74,10 @@ button.go { background: var(--accent); color: #fff; }
 .singer { display: flex; align-items: center; gap: 8px; padding: 10px 12px; margin-bottom: 6px; background: var(--card); border-radius: 10px; }
 .singer .meta { flex: 1; }
 .singer.blocked .title { text-decoration: line-through; color: var(--muted); }
+.setting { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 8px;
+  background: var(--card); border-radius: 10px; color: var(--muted); font-size: 14px; }
+.setting b { color: var(--text); font-weight: 600; }
+.setting span, .setting label { flex: 1; }
+.setting input[type=checkbox] { flex: none; width: 22px; height: 22px; accent-color: var(--accent); }
+.setting input[type=number] { flex: 0 0 4em; padding: 8px; text-align: center; }
+.setting button { padding: 6px 12px; font-size: 14px; }

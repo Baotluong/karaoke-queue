@@ -19,9 +19,11 @@ async function act(path, opts = {}) {
   try {
     await api(path, { method: "POST", ...opts });
     flash("");
+    return true;
   } catch (err) {
-    if (err.status === 401) return showLoggedIn(false);
-    flash(err.message, true);
+    if (err.status === 401) showLoggedIn(false);
+    else flash(err.message, true);
+    return false;
   }
 }
 
@@ -65,6 +67,9 @@ function render(state) {
   $("#count").textContent = total ? `(${total})` : "";
 
   if (state.singers) renderSingers(state.singers);
+  $("#fair-turns").checked = !!state.fair_turns;
+  const input = $("#max-waiting");
+  if (document.activeElement !== input) input.value = state.max_waiting;
 }
 
 function renderSingers(singers) {
@@ -124,6 +129,20 @@ $("#logout").addEventListener("click", async (e) => {
   e.preventDefault();
   await api("/api/admin/logout", { method: "POST" });
   showLoggedIn(false);
+});
+
+$("#settings-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (await act("/api/admin/settings", { body: JSON.stringify({ max_waiting: Number($("#max-waiting").value) }) })) {
+    $("#max-waiting").blur();
+    flash("Saved");
+  }
+});
+
+$("#fair-turns").addEventListener("change", async (e) => {
+  if (await act("/api/admin/settings", { body: JSON.stringify({ fair_turns: e.target.checked }) })) {
+    flash(e.target.checked ? "Fair turns on" : "Fair turns off: new songs go to the bottom");
+  }
 });
 
 $("#pause").addEventListener("click", () => act("/api/admin/pause"));

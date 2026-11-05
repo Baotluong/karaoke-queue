@@ -211,3 +211,8 @@ def test_logout_and_admin_page(client):
     assert client.get("/api/admin/state").status_code == 200
     client.post("/api/admin/logout")
     assert client.get("/api/admin/state").status_code == 401
+
+
+def test_pages_and_assets_are_revalidated(client):
+    for path in ("/", "/admin", "/static/app.js", "/static/style.css"):
+        assert client.get(path).headers["cache-control"] == "no-cache", path

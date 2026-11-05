@@ -41,6 +41,19 @@
     </section>
 
     <section>
+      <h2>House rules</h2>
+      <label class="setting">
+        <input id="fair-turns" type="checkbox">
+        <span><b>Fair turns</b><br>New songs go in the singer's turn. Off: new songs go to the bottom.</span>
+      </label>
+      <form id="settings-form" class="setting">
+        <input id="max-waiting" type="number" min="0" max="50" inputmode="numeric">
+        <label for="max-waiting"><b>Max songs waiting per person</b><br>0 = no limit</label>
+        <button>Save</button>
+      </form>
+    </section>
+
+    <section>
       <h2>Singers</h2>
       <div id="singers"></div>
     </section>

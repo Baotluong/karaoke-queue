@@ -40,7 +40,18 @@ CREATE TABLE IF NOT EXISTS requests (
 );
 
 CREATE INDEX IF NOT EXISTS idx_requests_status_pos ON requests(status, position);
+
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
+
+DEFAULT_MAX_WAITING = 3
+
+
+class QueueRuleError(Exception):
+    """A request breaks a house rule (limit reached, duplicate song)."""
 
 
 @dataclass
@@ -173,6 +184,42 @@ class Store:
             )
         self._changed()
 
+    # --- settings ------------------------------------------------------------
+
+    def _get_setting(self, key: str) -> str | None:
+        row = self.db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+        return row[0] if row else None
+
+    def _set_setting(self, key: str, value: str) -> None:
+        self.db.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, value),
+        )
+        self._changed()
+
+    @property
+    def max_waiting(self) -> int:
+        """Most songs one person may have waiting at once. 0 means no limit."""
+        value = self._get_setting("max_waiting")
+        return int(value) if value is not None else DEFAULT_MAX_WAITING
+
+    def set_max_waiting(self, value: int) -> None:
+        if not 0 <= value <= 50:
+            raise ValueError("limit must be between 0 and 50")
+        self._set_setting("max_waiting", str(value))
+
+    @property
+    def fair_turns(self) -> bool:
+        """On: new songs go in the singer's turn. Off: new songs go to the bottom."""
+        return self._get_setting("fair_turns") != "0"
+
+    def set_fair_turns(self, on: bool) -> None:
+        self._set_setting("fair_turns", "1" if on else "0")
+
+    def settings(self) -> dict:
+        return {"max_waiting": self.max_waiting, "fair_turns": self.fair_turns}
+
     # --- queue ---------------------------------------------------------------
 
     _SELECT = """
@@ -182,16 +229,58 @@ class Store:
     """
 
     def add(self, singer: Singer, video: Video) -> SongRequest:
-        row = self.db.execute("SELECT MAX(position) FROM requests WHERE status='queued'").fetchone()
-        position = (row[0] or 0) + 1
+        """Add a song in the singer's fair turn. Raises QueueRuleError if not allowed."""
+        upcoming = self.upcoming()
+        now = self.now_playing()
+        if any(r.video_id == video.video_id for r in upcoming + ([now] if now else [])):
+            raise QueueRuleError("That song is already in the queue")
+        limit = self.max_waiting
+        if limit and sum(r.singer_id == singer.id for r in upcoming) >= limit:
+            raise QueueRuleError(
+                f"You already have {limit} song{'s' if limit != 1 else ''} waiting. "
+                "Add another after one of them plays."
+            )
+
+        index = self.fair_index(singer.id, upcoming, now) if self.fair_turns else len(upcoming)
+        ids = [r.id for r in upcoming]
         cur = self.db.execute(
             """INSERT INTO requests
                (singer_id, video_id, title, channel, thumbnail, status, position, created_at)
-               VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)""",
-            (singer.id, video.video_id, video.title, video.channel, video.thumbnail, position, time.time()),
+               VALUES (?, ?, ?, ?, ?, 'queued', 0, ?)""",
+            (singer.id, video.video_id, video.title, video.channel, video.thumbnail, time.time()),
         )
+        ids.insert(index, cur.lastrowid)
+        self._renumber(ids)
         self._changed()
         return self.get(cur.lastrowid)  # type: ignore[return-value]
+
+    @staticmethod
+    def fair_index(
+        singer_id: int, upcoming: list[SongRequest], now: SongRequest | None
+    ) -> int:
+        """Where a new song from `singer_id` goes so everyone takes turns.
+
+        Each person's 1st waiting song is in round 1, their 2nd in round 2, and
+        so on; the song playing right now counts as its singer's round 1, so
+        nobody sings twice in a row while others are waiting. The new song goes
+        after the last song in its round or an earlier one. Because this reads
+        the queue as it actually is, an admin's manual reordering is kept.
+        """
+        counts: dict[int, int] = {}
+        if now:
+            counts[now.singer_id] = 1
+        my_round = counts.get(singer_id, 0) + sum(r.singer_id == singer_id for r in upcoming) + 1
+        index = 0
+        for i, r in enumerate(upcoming):
+            counts[r.singer_id] = counts.get(r.singer_id, 0) + 1
+            if counts[r.singer_id] <= my_round:
+                index = i + 1
+        return index
+
+    def _renumber(self, ids: list[int]) -> None:
+        self.db.executemany(
+            "UPDATE requests SET position=? WHERE id=?", [(i + 1, rid) for i, rid in enumerate(ids)]
+        )
 
     def get(self, request_id: int) -> SongRequest | None:
         row = self.db.execute(self._SELECT + " WHERE r.id=?", (request_id,)).fetchone()
@@ -216,17 +305,18 @@ class Store:
             return False
         ids.remove(request_id)
         ids.insert(max(0, min(index, len(ids))), request_id)
-        self.db.executemany(
-            "UPDATE requests SET position=? WHERE id=?", [(i + 1, rid) for i, rid in enumerate(ids)]
-        )
+        self._renumber(ids)
         self._changed()
         return True
 
-    def remove(self, request_id: int) -> bool:
-        cur = self.db.execute(
-            "UPDATE requests SET status='removed', finished_at=? WHERE id=? AND status='queued'",
-            (time.time(), request_id),
-        )
+    def remove(self, request_id: int, singer_id: int | None = None) -> bool:
+        """Take a waiting song out. With `singer_id`, only if it's that singer's song."""
+        sql = "UPDATE requests SET status='removed', finished_at=? WHERE id=? AND status='queued'"
+        args: tuple = (time.time(), request_id)
+        if singer_id is not None:
+            sql += " AND singer_id=?"
+            args += (singer_id,)
+        cur = self.db.execute(sql, args)
         self._changed()
         return cur.rowcount > 0
 

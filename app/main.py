@@ -21,7 +21,7 @@ from .admin import AdminAuth
 from .config import Settings
 from .player import Player
 from .search import SearchError, Searcher, extract_video_id
-from .store import Store
+from .store import QueueRuleError, Store
 from .tv import FakeScreen, LoungeScreen, Screen
 
 log = logging.getLogger(__name__)
@@ -72,6 +72,11 @@ class BlockBody(BaseModel):
     blocked: bool
 
 
+class SettingsBody(BaseModel):
+    max_waiting: int | None = None
+    fair_turns: bool | None = None
+
+
 def create_app(settings: Settings | None = None, screen: Screen | None = None) -> FastAPI:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     logging.getLogger("pyytlounge").setLevel(logging.WARNING)
@@ -88,7 +93,7 @@ def create_app(settings: Settings | None = None, screen: Screen | None = None) -
     auth = AdminAuth(settings.admin_pin)
 
     def public_state() -> dict:
-        return {**store.snapshot(), "tv": screen.status()}
+        return {**store.snapshot(), "tv": screen.status(), **store.settings()}
 
     hub.state_fn = public_state
     store.on_change(hub.notify)
@@ -105,6 +110,16 @@ def create_app(settings: Settings | None = None, screen: Screen | None = None) -
                 await player.stop()
 
     app = FastAPI(title="Karaoke Queue", lifespan=lifespan)
+
+    @app.middleware("http")
+    async def revalidate_pages(request: Request, call_next):
+        # Phones would otherwise keep stale JS/CSS after an update. "no-cache" still
+        # lets them reuse their copy when the server says it hasn't changed (304).
+        response = await call_next(request)
+        path = request.url.path
+        if path.startswith("/static/") or path in ("/", "/admin"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
     app.state.store, app.state.player, app.state.screen = store, player, screen
 
     def current_singer(token: str | None):
@@ -164,7 +179,19 @@ def create_app(settings: Settings | None = None, screen: Screen | None = None) -
             video = await app.state.searcher.lookup(video_id)
         except SearchError as exc:
             raise HTTPException(400, str(exc))
-        return store.add(singer, video).public()
+        try:
+            added = store.add(singer, video)
+        except QueueRuleError as exc:
+            raise HTTPException(409, str(exc))
+        place = next(i for i, r in enumerate(store.upcoming(), 1) if r.id == added.id)
+        return {**added.public(), "place": place}
+
+    @app.delete("/api/requests/{request_id}")
+    async def remove_own_request(request_id: int, kq_token: str | None = Cookie(default=None)):
+        singer = current_singer(kq_token)
+        if not store.remove(request_id, singer_id=singer.id):
+            raise HTTPException(404, "That song isn't waiting in the queue, or it isn't yours")
+        return {"ok": True}
 
     # --- admin ----------------------------------------------------------------
 
@@ -188,6 +215,17 @@ def create_app(settings: Settings | None = None, screen: Screen | None = None) -
     @app.get("/api/admin/state", dependencies=admin)
     async def admin_state():
         return {**public_state(), "singers": store.singers()}
+
+    @app.post("/api/admin/settings", dependencies=admin)
+    async def admin_settings(body: SettingsBody):
+        try:
+            if body.max_waiting is not None:
+                store.set_max_waiting(body.max_waiting)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        if body.fair_turns is not None:
+            store.set_fair_turns(body.fair_turns)
+        return {"ok": True}
 
     @app.post("/api/admin/skip", dependencies=admin)
     async def admin_skip():
