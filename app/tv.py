@@ -26,6 +26,11 @@ class Screen:
     """Interface the player uses."""
 
     on_ended: EndedCallback | None = None
+    on_status: Callable[[], None] | None = None  # connection or pause state changed
+
+    def _status_changed(self) -> None:
+        if self.on_status:
+            self.on_status()
 
     @property
     def ready(self) -> bool:
@@ -34,6 +39,12 @@ class Screen:
     async def start(self) -> None: ...
     async def stop(self) -> None: ...
     async def play_video(self, video_id: str) -> bool:
+        raise NotImplementedError
+
+    async def pause(self) -> bool:
+        raise NotImplementedError
+
+    async def resume(self) -> bool:
         raise NotImplementedError
 
     def status(self) -> dict:
@@ -47,6 +58,7 @@ class FakeScreen(Screen):
         self.song_seconds = song_seconds
         self.played: list[str] = []
         self.current: str | None = None
+        self.paused = False
         self._timer: asyncio.Task | None = None
 
     @property
@@ -61,6 +73,16 @@ class FakeScreen(Screen):
         if self.song_seconds is not None:
             self._timer = asyncio.create_task(self._auto_end(video_id))
         log.info("[fake tv] playing %s", video_id)
+        return True
+
+    async def pause(self) -> bool:
+        self.paused = True
+        self._status_changed()
+        return True
+
+    async def resume(self) -> bool:
+        self.paused = False
+        self._status_changed()
         return True
 
     async def _auto_end(self, video_id: str) -> None:
@@ -79,7 +101,7 @@ class FakeScreen(Screen):
             self._timer.cancel()
 
     def status(self) -> dict:
-        return {"ready": True, "name": "Fake TV", "fake": True}
+        return {"ready": True, "name": "Fake TV", "fake": True, "paused": self.paused}
 
 
 class _LoungeEvents(EventListener):
@@ -111,6 +133,7 @@ class LoungeScreen(Screen):
         self._expected: str | None = None  # video we asked the TV to play
         self._tv_video: str | None = None  # video the TV says it is on
         self._seen_playing = False
+        self._paused = False
         self._last_error: str | None = None
 
     @property
@@ -123,6 +146,7 @@ class LoungeScreen(Screen):
             "name": self.api.screen_name if self.api else None,
             "paired": self.auth_file.exists(),
             "error": None if self.ready else self._last_error,
+            "paused": self._paused,
         }
 
     async def start(self) -> None:
@@ -145,12 +169,14 @@ class LoungeScreen(Screen):
                 try:
                     await self._connect_once(api)
                     if api.connected():
+                        self._status_changed()
                         await api.subscribe()  # returns when the connection drops
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:  # network blips, expired tokens, TV off
                     self._last_error = str(exc) or type(exc).__name__
                     log.warning("TV connection error: %s", self._last_error)
+                self._status_changed()
                 await asyncio.sleep(self.RETRY_SECONDS)
 
     async def _connect_once(self, api: YtLoungeApi) -> None:
@@ -181,7 +207,16 @@ class LoungeScreen(Screen):
         self._seen_playing = False
         return await self.api.play_video(video_id)
 
+    async def pause(self) -> bool:
+        return bool(self.ready and self.api and await self.api.pause())
+
+    async def resume(self) -> bool:
+        return bool(self.ready and self.api and await self.api.play())
+
     async def _on_state(self, state: State, current: float | None, duration: float | None) -> None:
+        if state in (State.Playing, State.Paused) and self._paused != (state == State.Paused):
+            self._paused = state == State.Paused
+            self._status_changed()
         if not self._expected or self._tv_video != self._expected:
             return
         if state == State.Playing:

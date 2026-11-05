@@ -59,3 +59,18 @@ button.small { padding: 6px 12px; font-size: 14px; }
 .empty { color: var(--muted); justify-content: center; padding: 20px !important; }
 .msg { color: var(--muted); font-size: 14px; min-height: 1em; margin: 8px 0; }
 .msg.err { color: var(--warn); }
+
+/* --- admin ---------------------------------------------------------------- */
+footer { text-align: center; padding: 24px; }
+footer a, .link { color: var(--muted); font-size: 14px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.item.admin { flex-wrap: wrap; }
+.controls { display: flex; gap: 6px; width: 100%; justify-content: flex-end; }
+.controls button, .row button {
+  padding: 6px 10px; font-size: 14px; background: var(--line); color: var(--text);
+}
+button.danger { background: color-mix(in srgb, var(--warn) 25%, var(--card)); color: var(--warn); }
+button.go { background: var(--accent); color: #fff; }
+.singer { display: flex; align-items: center; gap: 8px; padding: 10px 12px; margin-bottom: 6px; background: var(--card); border-radius: 10px; }
+.singer .meta { flex: 1; }
+.singer.blocked .title { text-decoration: line-through; color: var(--muted); }

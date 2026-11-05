@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Karaoke Admin</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>🎛️ Karaoke Admin</h1>
+  <span id="tv-status" class="pill">TV…</span>
+</header>
+
+<main>
+  <section id="login" hidden>
+    <h2>Admin PIN</h2>
+    <form id="login-form">
+      <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN" required>
+      <button>Log in</button>
+    </form>
+    <p id="login-msg" class="msg err"></p>
+  </section>
+
+  <div id="panel" hidden>
+    <section>
+      <h2>Now playing</h2>
+      <div id="now-card" class="empty">Nothing playing yet</div>
+      <div class="row">
+        <button id="pause">⏸ Pause</button>
+        <button id="resume">▶ Resume</button>
+        <button id="skip" class="danger">⏭ Skip song</button>
+      </div>
+    </section>
+
+    <p id="msg" class="msg"></p>
+
+    <section>
+      <h2>Up next <small id="count"></small></h2>
+      <ol id="queue" class="list"></ol>
+    </section>
+
+    <section>
+      <h2>Singers</h2>
+      <div id="singers"></div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <a href="/">Guest page</a>
+  <span id="logout-wrap" hidden> · <a href="#" id="logout">Log out</a></span>
+</footer>
+
+<script src="/static/common.js"></script>
+<script src="/static/admin.js"></script>
+</body>
+</html>

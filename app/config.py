@@ -18,6 +18,7 @@ class Settings:
     yt_api_key: str | None = None
     fake_tv: bool = False
     fake_song_seconds: float = 20.0
+    admin_pin: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -28,4 +29,5 @@ class Settings:
             yt_api_key=os.getenv("YT_API_KEY") or None,
             fake_tv=os.getenv("KQ_FAKE_TV", "").lower() in ("1", "true", "yes"),
             fake_song_seconds=float(os.getenv("KQ_FAKE_SONG_SECONDS", cls.fake_song_seconds)),
+            admin_pin=os.getenv("KQ_ADMIN_PIN") or None,
         )

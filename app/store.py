@@ -14,12 +14,15 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
 
-SCHEMA = """
+STATUSES = ("queued", "playing", "done", "skipped", "removed")
+
+SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS singers (
     id          INTEGER PRIMARY KEY,
     name        TEXT NOT NULL,
     token       TEXT NOT NULL UNIQUE,
-    created_at  REAL NOT NULL
+    created_at  REAL NOT NULL,
+    blocked     INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS requests (
@@ -29,7 +32,7 @@ CREATE TABLE IF NOT EXISTS requests (
     title       TEXT NOT NULL,
     channel     TEXT NOT NULL DEFAULT '',
     thumbnail   TEXT NOT NULL DEFAULT '',
-    status      TEXT NOT NULL CHECK (status IN ('queued', 'playing', 'done', 'skipped')),
+    status      TEXT NOT NULL CHECK (status IN {STATUSES!r}),
     position    REAL NOT NULL,
     created_at  REAL NOT NULL,
     started_at  REAL,
@@ -45,6 +48,7 @@ class Singer:
     id: int
     name: str
     token: str
+    blocked: bool = False
 
 
 @dataclass
@@ -75,10 +79,35 @@ class Store:
     def __init__(self, path: str | Path = ":memory:") -> None:
         self.db = sqlite3.connect(str(path), check_same_thread=False)
         self.db.row_factory = sqlite3.Row
+        self._migrate()
         self.db.execute("PRAGMA foreign_keys = ON")
-        self.db.executescript(SCHEMA)
         self._listeners: list[Callable[[], None]] = []
         self._recover_interrupted()
+
+    # --- schema / migrations --------------------------------------------------
+
+    def _migrate(self) -> None:
+        """Create tables, and upgrade databases made by older versions."""
+        self.db.executescript(SCHEMA)
+        cols = {r["name"] for r in self.db.execute("PRAGMA table_info(singers)")}
+        if "blocked" not in cols:  # Phase 1 database
+            self.db.execute("ALTER TABLE singers ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0")
+        sql = self.db.execute("SELECT sql FROM sqlite_master WHERE name='requests'").fetchone()[0]
+        if "'removed'" not in sql:  # Phase 1 CHECK constraint lacks 'removed'; rebuild the table
+            self.db.executescript(
+                """
+                BEGIN;
+                ALTER TABLE requests RENAME TO requests_old;
+                DROP INDEX IF EXISTS idx_requests_status_pos;
+                """
+                + SCHEMA
+                + """
+                INSERT INTO requests SELECT * FROM requests_old;
+                DROP TABLE requests_old;
+                COMMIT;
+                """
+            )
+        self.db.commit()
 
     # --- change notification -------------------------------------------------
 
@@ -114,8 +143,35 @@ class Store:
     def singer_by_token(self, token: str | None) -> Singer | None:
         if not token:
             return None
-        row = self.db.execute("SELECT id, name, token FROM singers WHERE token=?", (token,)).fetchone()
-        return Singer(**row) if row else None
+        row = self.db.execute(
+            "SELECT id, name, token, blocked FROM singers WHERE token=?", (token,)
+        ).fetchone()
+        return Singer(row["id"], row["name"], row["token"], bool(row["blocked"])) if row else None
+
+    def singers(self) -> list[dict]:
+        """Everyone who has joined, with how many songs they have waiting and sung."""
+        rows = self.db.execute(
+            """SELECT s.id, s.name, s.blocked,
+                      SUM(r.status = 'queued')  AS queued,
+                      SUM(r.status IN ('playing', 'done')) AS sung
+               FROM singers s LEFT JOIN requests r ON r.singer_id = s.id
+               GROUP BY s.id ORDER BY s.blocked, s.name COLLATE NOCASE"""
+        )
+        return [
+            {"id": r["id"], "name": r["name"], "blocked": bool(r["blocked"]),
+             "queued": r["queued"] or 0, "sung": r["sung"] or 0}
+            for r in rows
+        ]
+
+    def set_blocked(self, singer_id: int, blocked: bool) -> None:
+        """Blocking also takes the singer's waiting songs out of the queue."""
+        self.db.execute("UPDATE singers SET blocked=? WHERE id=?", (int(blocked), singer_id))
+        if blocked:
+            self.db.execute(
+                "UPDATE requests SET status='removed', finished_at=? WHERE singer_id=? AND status='queued'",
+                (time.time(), singer_id),
+            )
+        self._changed()
 
     # --- queue ---------------------------------------------------------------
 
@@ -152,6 +208,27 @@ class Store:
     def next_up(self) -> SongRequest | None:
         upcoming = self.upcoming()
         return upcoming[0] if upcoming else None
+
+    def move(self, request_id: int, index: int) -> bool:
+        """Move a waiting song to `index` (0 = next up). Returns False if not queued."""
+        ids = [r.id for r in self.upcoming()]
+        if request_id not in ids:
+            return False
+        ids.remove(request_id)
+        ids.insert(max(0, min(index, len(ids))), request_id)
+        self.db.executemany(
+            "UPDATE requests SET position=? WHERE id=?", [(i + 1, rid) for i, rid in enumerate(ids)]
+        )
+        self._changed()
+        return True
+
+    def remove(self, request_id: int) -> bool:
+        cur = self.db.execute(
+            "UPDATE requests SET status='removed', finished_at=? WHERE id=? AND status='queued'",
+            (time.time(), request_id),
+        )
+        self._changed()
+        return cur.rowcount > 0
 
     def mark_playing(self, request_id: int) -> None:
         self.db.execute(

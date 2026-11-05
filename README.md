@@ -21,6 +21,10 @@ python3 -m venv .venv
 3. Guests open `http://<this computer's IP>:8000` on their phones.
    On a Mac: `ipconfig getifaddr en0` shows the IP.
 
+Admins open `http://<IP>:8000/admin` and enter the PIN to skip, pause/resume,
+reorder, remove, play a song now, or block a singer (which also removes their
+waiting songs). Share the PIN with the few people who should run the night.
+
 Without a TV (development): `KQ_FAKE_TV=1 KQ_FAKE_SONG_SECONDS=15` before the
 command fakes a TV whose songs last 15 seconds.
 
@@ -29,6 +33,7 @@ command fakes a TV whose songs last 15 seconds.
 | Variable | Default | Meaning |
 |---|---|---|
 | `YT_API_KEY` | none | YouTube Data API key. Without it, guests paste YouTube links instead of searching. |
+| `KQ_ADMIN_PIN` | random each run (printed in the log) | PIN for the admin page at `/admin` |
 | `KQ_DB` | `karaoke.db` | SQLite database file |
 | `KQ_FAKE_TV` | off | Use a pretend TV |
 | `KQ_FAKE_SONG_SECONDS` | `20` | Song length on the fake TV |

@@ -75,3 +75,16 @@ class Player:
         current = self.store.now_playing()
         if current:
             self.store.mark_finished(current.id, "skipped")
+
+    async def play_now(self, request_id: int) -> bool:
+        """Jump a waiting song to the front and cut off whatever is playing."""
+        if not self.store.move(request_id, 0):
+            return False
+        await self.skip()
+        return True
+
+    async def pause(self) -> bool:
+        return await self.screen.pause()
+
+    async def resume(self) -> bool:
+        return await self.screen.resume()
