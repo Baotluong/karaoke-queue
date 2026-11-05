@@ -1,0 +1,2 @@
+pyytlounge>=3.6
+certifi
