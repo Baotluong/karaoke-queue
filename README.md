@@ -1,118 +1,239 @@
-# karaoke-queue
+# 🎤 Karaoke Queue
 
-A house karaoke queue: guests request songs from their phones, admins control
-the order, and a server drives the YouTube app on the TV. Guests never connect
-to the TV, so the TV's Premium account stays ad-free (confirmed in Phase 0).
+**A party-proof karaoke queue for the YouTube app on your TV.** Guests scan a QR
+code and request songs from their phones, everyone takes fair turns, admins run
+the show, and the TV keeps its YouTube Premium status, so no ads mid-chorus.
 
-## Setup
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-WebSockets-009688?logo=fastapi&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
+![Cloudflare Tunnel](https://img.shields.io/badge/Cloudflare-Tunnel-F38020?logo=cloudflare&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-67%20passing-brightgreen)
 
-```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/guest.jpg" width="250" alt="Guest page: you're up next banner, now playing and the queue"></td>
+    <td align="center"><img src="docs/screenshots/invite.jpg" width="250" alt="Invite pop-up with a QR code to join the party"></td>
+    <td align="center"><img src="docs/screenshots/admin.jpg" width="250" alt="Admin page: party access, now playing and queue controls"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Guests</b><br>Search, request, see your place in line</td>
+    <td align="center"><b>Invite</b><br>Anyone in the party can share the QR code</td>
+    <td align="center"><b>Admins</b><br>Reorder, skip, pause, block, new link</td>
+  </tr>
+</table>
+
+<sub>Screenshots use the built-in fake TV and demo data.</sub>
+
+---
+
+## The problem
+
+YouTube's own shared queue ("Link with TV code") is the obvious way to do karaoke
+at home, and it has two problems:
+
+1. **One non-Premium guest brings the ads back.** As soon as anyone without
+   Premium joins the TV session, the TV plays ads for everyone, even if the host pays.
+2. **Nobody is in charge.** Every guest can skip, reorder and queue ten songs in a
+   row. There's no admin, no fairness and no way to keep strangers out.
+
+## The idea
+
+**Guests never connect to the TV. Only the server does.**
+
+Guests talk to a small web app. The server is the TV's only remote: it keeps the
+real queue and sends one song at a time to the YouTube app over the same protocol
+that phone remotes use. With no guest accounts in the TV session, a TV signed in
+to Premium stays ad-free. Before writing the app, I proved this with a spike that
+played monetized videos and listened for ad events: none came.
+
+```mermaid
+flowchart LR
+    subgraph Phones["Guests' phones (anywhere)"]
+        G["Guest page"]
+        A["Admin page"]
+    end
+    CF["Cloudflare quick tunnel<br/>(HTTPS)"]
+    subgraph Host["Host laptop"]
+        S["FastAPI server<br/>queue, house rules, auth"]
+        DB[("SQLite")]
+        P["Player loop<br/>+ watchdog"]
+    end
+    LAPI["YouTube Lounge API"]
+    TV["YouTube app on the TV<br/>(signed in to Premium)"]
+    DAPI["YouTube Data API<br/>(search)"]
+
+    G -- "HTTP + WebSocket" --> CF
+    A -- "HTTP + WebSocket" --> CF
+    CF --> S
+    S <--> DB
+    S -- "search (cached)" --> DAPI
+    S --> P
+    P -- "play / pause" --> LAPI --> TV
+    TV -. "playback events" .-> LAPI -.-> P
 ```
 
-## Run a party
+## Features
 
-1. Install Cloudflare's tunnel tool once: `brew install cloudflared`
-2. Start the party:
-   ```bash
-   .venv/bin/python party.py
-   ```
-   This starts the server and a free Cloudflare quick tunnel, then prints a QR
-   code. Guests scan it from anywhere (Wi-Fi not needed). The tunnel address is
-   new each time you start it, so the QR code is too.
-   Use `party.py --local` for Wi-Fi-only, without a tunnel.
-3. Pair the TV once on the admin page (TV section). This saves `.lounge_auth.json`.
-4. Anyone in the party can tap **📲 Invite** to show the QR code full-screen, copy
-   the link or share it. Admins also have **Show QR code** on the admin page.
+**For guests**
+- Scan the QR code, type a name, then search YouTube (it adds "karaoke"
+  automatically) or paste a link.
+- See the live queue and your place in line. Remove your own songs.
+- **"You're up next" / "You're on!"** banner, tab title and vibration, with
+  optional system notifications.
+- **📲 Invite** pops up the party's QR code to share with friends.
 
-### During the party
+**For admins** (shared PIN)
+- Skip, pause and resume, **▶ Play now**, move up/down/top, and remove.
+- Block or remove singers. Idle singers are tucked under "Show older".
+- **House rules:** fair turns on/off and a per-person waiting limit.
+- **Party access:** a new link (old QR codes stop working at once), open/closed
+  to new songs, and **New night** to wipe the slate.
+- Pair the TV from the admin page with its "Link with TV code".
 
-- **Your turn:** a guest's page shows "You're up next" / "You're on!" (and the
-  browser tab title changes), and Android phones vibrate. With **🔔 Notify me**
-  (over the tunnel's HTTPS link) they also get a notification while the page is
-  in the background. Alerts need the page open; a locked phone may not get them,
-  and iPhones only allow notifications for home-screen web apps.
-- **Songs that won't play** (removed, region-blocked, age-restricted) are skipped
-  automatically after 30 seconds; the singer and admins see a notice.
-- **Pair the TV** from the TV section of the admin page (TV: YouTube → Settings →
-  Link with TV code). No terminal needed.
+**Fair turns.** Each person's 1st waiting song is in round 1, their 2nd in round 2,
+and so on. The song playing now counts as its singer's turn, and songs already sung
+never count against anyone. A new song goes at the end of its round:
 
-- **Singers list:** people idle for 3+ hours are tucked under "Show older".
-  **Block** stops someone adding songs (tied to their phone's sign-in, not their
-  IP: everyone on your Wi-Fi shares one). **✕ Remove** drops their waiting songs
-  and signs their phone out; they can rejoin with a working party link, so pair it
-  with **New link** for someone unwelcome.
-- **New night** (admin page) clears the queue, singers and history, stops the
-  current song and makes a new party link. House rules are kept.
+| Queue before | Jordan joins and adds a song |
+|---|---|
+| ▶ Alex · 1. Sam · 2. Priya · 3. Alex | ▶ Alex · 1. Sam · 2. Priya · **3. Jordan** · 4. Alex |
 
-### Keeping strangers out
+Newcomers wait at most about one round, and nobody sings twice in a row while
+others are waiting. The insertion reads the queue as it actually is, so an admin's
+manual reordering is never undone.
 
-- Every guest page needs the **party link** (the QR code). Without it people see
-  "Scan the QR code to join".
-- **New link** on the admin page makes a new QR code; anyone using the old link
-  is locked out at once and must scan again.
-- **Open to new songs** off: nobody can join or add songs; the queue keeps playing.
-- Rate limits per guest (by real IP, also through the tunnel): 5 joins, 20
-  searches and 20 song requests per 10 minutes. Searches are cached for 6 hours
-  to save YouTube quota.
-- Admin login locks a device out after 5 wrong tries, and locks all logins for a
-  while after 30 wrong tries overall. Use a PIN of 6+ characters.
-- Cookies are HTTPS-only when the page came through the tunnel.
+## Engineering highlights
 
-Admins open `http://<IP>:8000/admin` and enter the PIN to skip, pause/resume,
-reorder, remove, play a song now, or block a singer (which also removes their
-waiting songs). Share the PIN with the few people who should run the night.
+- **Risk first.** Phase 0 was a ~190-line spike to answer the one question that
+  could sink the project: does a Premium TV stay ad-free when only a script is
+  linked? The answer decided the architecture.
+- **A public link without a public free-for-all.** Moving from Wi-Fi-only to
+  "anyone with the QR code" brought a real threat model:
 
-**Fair turns (on by default):** everyone takes turns. Only the song playing now
-and songs still waiting count; songs already sung don't count against anyone.
-Each person's 1st waiting song is in round 1, their 2nd in round 2, and so on,
-and a new song goes at the end of its round, so newcomers go ahead of other
-people's second songs and nobody sings twice in a row while others are waiting.
-Admins can still reorder by hand, and can turn fair turns off under *House
-rules* on the admin page (new songs then go to the bottom).
+  | Threat | Mitigation |
+  |---|---|
+  | Strangers find the URL | Every guest route needs the party link's secret code (cookie); others see "Scan the QR code" |
+  | The link spreads too far | **New link** rotates the code and disconnects stale WebSockets immediately |
+  | Spam joins, searches and requests | Sliding-window rate limits per client, plus a waiting cap per singer |
+  | Dodging limits by faking an IP | Forwarded IP headers are trusted only from the local tunnel process |
+  | Burning the YouTube API quota (~100 searches/day) | 6-hour search cache; pasted links use a keyless lookup |
+  | Guessing the admin PIN | Per-client lockout **and** a global lockout (defeats IP rotation); constant-time comparisons |
+  | Cookie theft | HttpOnly, SameSite, and Secure whenever the request came in over HTTPS |
 
-In both modes each person can have up to 3 songs waiting (changeable under
-*House rules*; 0 = no limit), the same song can't be queued twice, and guests
-can remove their own waiting songs.
+- **Reliability for a live event.**
+  - The TV connection reconnects on its own and refreshes expired tokens.
+  - YouTube's autoplay is turned off so the TV never wanders off between songs.
+  - A **watchdog** skips videos that never start (removed, region-blocked or
+    age-restricted), but doesn't blame the song if the TV dropped offline.
+  - A song interrupted by a crash goes back to the front of the queue.
+  - Older databases are upgraded in place, so no party history is lost.
+- **Live updates** over a WebSocket hub: every change in the queue, TV status or
+  notices reaches every phone at once.
+- **Tested without a TV.** A `FakeScreen` implements the same interface as the real
+  TV, so the 67 tests cover the player, fairness rules, auth, rate limits and
+  migrations deterministically. Each phase was also checked end to end in a real
+  browser, through a real Cloudflare tunnel, and on a real TV.
 
-Without a TV (development): `KQ_FAKE_TV=1 KQ_FAKE_SONG_SECONDS=15` before the
-command fakes a TV whose songs last 15 seconds.
+## Tech stack
 
-### Settings (environment variables or a `.env` file)
+| Layer | Choice | Why |
+|---|---|---|
+| Server | Python, FastAPI, Uvicorn | Async fits a long-lived TV connection plus WebSockets |
+| TV control | [`pyytlounge`](https://github.com/FabioGNR/pyytlounge) (YouTube Lounge API) | The protocol behind "Link with TV code" remotes |
+| Storage | SQLite | One house, one queue; nothing to run |
+| Frontend | Plain HTML, CSS, JS, WebSocket | Phones just open a link: no install, no build step |
+| Public access | Cloudflare quick tunnel | HTTPS link from a laptop, no router changes, home IP stays private |
+| QR codes | `segno` | Pure Python; terminal and SVG output |
+| Tests | pytest, pytest-asyncio, Starlette TestClient | |
+
+## Getting started
+
+You need Python 3.11+, a TV with the YouTube app signed in to Premium, and a
+[YouTube Data API key](https://developers.google.com/youtube/v3/getting-started)
+(free) for song search.
+
+```bash
+git clone https://github.com/Baotluong/karaoke-queue.git
+cd karaoke-queue
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+brew install cloudflared            # for links that work off your Wi-Fi
+```
+
+Create a `.env` file:
+
+```bash
+YT_API_KEY=your-youtube-data-api-key
+KQ_ADMIN_PIN=pick-6-or-more-characters
+```
+
+Start a party:
+
+```bash
+.venv/bin/python party.py           # or: party.py --local for Wi-Fi only
+```
+
+`party.py` starts the server and a Cloudflare tunnel, then prints a QR code. Open
+the admin link it prints, log in with your PIN, and pair the TV under **TV**
+(YouTube app → Settings → Link with TV code). Then show the QR code to your guests.
+
+### Configuration
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `YT_API_KEY` | none | YouTube Data API key. Without it, guests paste YouTube links instead of searching. |
-| `KQ_ADMIN_PIN` | random each run (printed in the log) | PIN for the admin page at `/admin` |
-| `KQ_PUBLIC_URL` | set by `party.py` | Address used in the QR code |
-| `KQ_DB` | `karaoke.db` | SQLite database file |
-| `KQ_FAKE_TV` | off | Use a pretend TV |
+| `YT_API_KEY` | none | YouTube Data API key. Without it, guests paste links instead of searching. |
+| `KQ_ADMIN_PIN` | random each run (printed) | PIN for `/admin`; use 6+ characters on a public link |
+| `KQ_PUBLIC_URL` | set by `party.py` | Base address used in the QR code |
+| `KQ_DB` | `karaoke.db` | SQLite file |
+| `KQ_FAKE_TV` | off | Use a pretend TV (development) |
 | `KQ_FAKE_SONG_SECONDS` | `20` | Song length on the fake TV |
 
-### Tests
+## Development
 
 ```bash
-.venv/bin/pytest
+.venv/bin/pytest                    # 67 tests, no TV or network needed
+
+# Run with a pretend TV whose songs last 15 seconds
+KQ_FAKE_TV=1 KQ_FAKE_SONG_SECONDS=15 .venv/bin/python party.py --local
 ```
 
-## Phase 0: ad spike
+```
+app/
+  main.py      FastAPI routes, WebSocket hub, party gate, rate limits
+  store.py     SQLite: singers, queue, fair-turn insertion, settings, migrations
+  player.py    Sends the next song to the TV, watchdog, notices
+  tv.py        Screen interface: LoungeScreen (real TV) and FakeScreen
+  search.py    YouTube search with a cache, link parsing, keyless lookup
+  admin.py     PIN auth with per-client and global lockouts
+  limits.py    Sliding-window rate limiter, real client IP behind the tunnel
+  static/      Guest, admin and gate pages (vanilla JS)
+party.py       Starts server + tunnel and prints the QR code
+spike/         Phase 0: the ad-free experiment
+tests/         67 tests
+```
 
-1. Make sure the TV's YouTube app is signed into the Premium account.
-2. Pair once (TV: Settings > Link with TV code):
-   ```bash
-   .venv/bin/python spike/ad_check.py pair
-   ```
-3. Play test videos and watch for ads:
-   ```bash
-   .venv/bin/python spike/ad_check.py run
-   ```
+## Build log
 
-## Roadmap
+Built in small phases, each tested on a real TV before moving on:
 
-- **Phase 0:** ad spike (Lounge API + Premium TV)
-- **Phase 1:** FastAPI + SQLite web app: guest search and request, live queue, player loop
-- **Phase 2:** admin PIN, reorder, skip, remove, block, optional approval
-- **Phase 3:** round-robin fairness, per-singer limits, no duplicate songs
-- **Phase 4:** public access via Cloudflare tunnel: party QR link, new link, open/closed, rate limits, search cache, admin lockouts
-- **Phase 5:** stuck-song watchdog, your-turn alerts, pair TV from the admin page
+| Phase | What shipped |
+|---|---|
+| 0 | Spike: proved a Premium TV stays ad-free when only the server is linked |
+| 1 | Web app: search, request, live queue, player loop |
+| 2 | Admin PIN: skip, pause, reorder, remove, block |
+| 3 | Fair turns, waiting limit, no duplicates, guests remove their own songs |
+| 4 | Join from anywhere: Cloudflare tunnel, QR party link, rate limits, lockouts |
+| 5 | Stuck-song watchdog, your-turn alerts, pair the TV from the admin page |
+| + | Invite pop-up, singer cleanup, new night |
+
+## Limitations
+
+- The YouTube Lounge API is unofficial. It's what YouTube's own phone remotes use,
+  but it could change without notice.
+- Your-turn alerts need the page open. iPhones only allow web notifications for
+  home-screen apps, and don't support vibration.
+- The quick-tunnel address changes each time `party.py` starts, so print the QR
+  code per party, not once.
+- Not affiliated with or endorsed by YouTube or Google. It doesn't block ads; it
+  just keeps your own Premium session to yourself.
