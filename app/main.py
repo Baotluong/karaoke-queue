@@ -183,6 +183,13 @@ def create_app(settings: Settings | None = None, screen: Screen | None = None) -
 
     party = [Depends(require_party)]
 
+    async def kick_stale_clients() -> None:
+        """After the party link changes, phones using the old one lose live updates now."""
+        for client in list(hub.clients):
+            if not has_party_access(client):
+                hub.clients.discard(client)
+                await client.close(code=4403)
+
     @app.get("/")
     async def index(request: Request):
         return FileResponse(STATIC / ("index.html" if has_party_access(request) else "gate.html"))
@@ -312,11 +319,7 @@ def create_app(settings: Settings | None = None, screen: Screen | None = None) -
             store.set_party_open(body.open)
         if body.new_link:
             store.rotate_join_code()
-            # Phones that joined with the old link lose live updates right away.
-            for client in list(hub.clients):
-                if not has_party_access(client):
-                    hub.clients.discard(client)
-                    await client.close(code=4403)
+            await kick_stale_clients()
         return {"join_url": join_url(request), "open": store.party_open, "public": bool(settings.public_url)}
 
 
@@ -365,6 +368,18 @@ def create_app(settings: Settings | None = None, screen: Screen | None = None) -
         if not store.remove(request_id):
             raise HTTPException(404, "That song isn't in the queue anymore")
         return {"ok": True}
+
+    @app.delete("/api/admin/singers/{singer_id}", dependencies=admin)
+    async def admin_remove_singer(singer_id: int):
+        if not store.remove_singer(singer_id):
+            raise HTTPException(404, "That singer was already removed")
+        return {"ok": True}
+
+    @app.post("/api/admin/new-night", dependencies=admin)
+    async def admin_new_night(request: Request):
+        await player.new_night()
+        await kick_stale_clients()
+        return {"join_url": join_url(request), "open": store.party_open, "public": bool(settings.public_url)}
 
     @app.post("/api/admin/singers/{singer_id}/block", dependencies=admin)
     async def admin_block(singer_id: int, body: BlockBody):

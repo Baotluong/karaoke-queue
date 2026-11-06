@@ -115,3 +115,5 @@ dialog.invite .row button.go { background: var(--accent); color: #fff; }
 .turn-banner.on { background: var(--accent); color: #fff; animation: pulse 1.2s ease-in-out 3; }
 @keyframes pulse { 50% { transform: scale(1.03); } }
 #alerts-btn { background: var(--line); color: var(--text); margin-bottom: 8px; }
+.singer button { padding: 6px 10px; font-size: 14px; }
+.link-button { background: none; color: var(--muted); font-size: 14px; font-weight: 500; text-decoration: underline; padding: 8px 0; }

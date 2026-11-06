@@ -77,7 +77,7 @@ def test_upgrades_phase1_database(tmp_path):
     s = Store(db)
     assert [r.title for r in s.upcoming()] == ["Waiting song"]
     assert s.remove(2)  # 'removed' status is now allowed
-    assert s.singers()[0] == {"id": 1, "name": "Ana", "blocked": False, "queued": 0, "sung": 1}
+    assert s.singers()[0] == {"id": 1, "name": "Ana", "blocked": False, "queued": 0, "sung": 1, "active": True}
     Store(db)  # opening again is a no-op
 
 

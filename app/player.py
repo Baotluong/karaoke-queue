@@ -145,6 +145,16 @@ class Player:
         await self.skip()
         return True
 
+    async def new_night(self) -> None:
+        """Wipe everything (see Store.new_night) and stop the TV mid-song."""
+        if self._watchdog:
+            self._watchdog.cancel()
+            self._watchdog = None
+        self._notices.clear()
+        self.store.new_night()
+        if self.screen.ready:
+            await self.screen.pause()
+
     async def pause(self) -> bool:
         return await self.screen.pause()
 

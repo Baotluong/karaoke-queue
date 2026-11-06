@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS singers (
     name        TEXT NOT NULL,
     token       TEXT NOT NULL UNIQUE,
     created_at  REAL NOT NULL,
-    blocked     INTEGER NOT NULL DEFAULT 0
+    blocked     INTEGER NOT NULL DEFAULT 0,
+    removed     INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS requests (
@@ -48,6 +49,7 @@ CREATE TABLE IF NOT EXISTS settings (
 """
 
 DEFAULT_MAX_WAITING = 3
+ACTIVE_HOURS = 3  # singers idle longer than this are tucked away on the admin page
 
 
 class QueueRuleError(Exception):
@@ -103,6 +105,8 @@ class Store:
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(singers)")}
         if "blocked" not in cols:  # Phase 1 database
             self.db.execute("ALTER TABLE singers ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0")
+        if "removed" not in cols:  # before admins could remove singers
+            self.db.execute("ALTER TABLE singers ADD COLUMN removed INTEGER NOT NULL DEFAULT 0")
         sql = self.db.execute("SELECT sql FROM sqlite_master WHERE name='requests'").fetchone()[0]
         if "'removed'" not in sql:  # Phase 1 CHECK constraint lacks 'removed'; rebuild the table
             self.db.executescript(
@@ -155,24 +159,59 @@ class Store:
         if not token:
             return None
         row = self.db.execute(
-            "SELECT id, name, token, blocked FROM singers WHERE token=?", (token,)
+            "SELECT id, name, token, blocked FROM singers WHERE token=? AND removed=0", (token,)
         ).fetchone()
         return Singer(row["id"], row["name"], row["token"], bool(row["blocked"])) if row else None
 
-    def singers(self) -> list[dict]:
-        """Everyone who has joined, with how many songs they have waiting and sung."""
+    def singers(self, active_hours: float = ACTIVE_HOURS) -> list[dict]:
+        """Everyone who has joined (and wasn't removed), with songs waiting and sung.
+
+        `active` is true for people with a song waiting or playing, or who joined,
+        requested or sang within `active_hours`; the admin page tucks the rest away.
+        """
         rows = self.db.execute(
             """SELECT s.id, s.name, s.blocked,
                       SUM(r.status = 'queued')  AS queued,
-                      SUM(r.status IN ('playing', 'done')) AS sung
+                      SUM(r.status = 'playing') AS playing,
+                      SUM(r.status IN ('playing', 'done')) AS sung,
+                      MAX(s.created_at, COALESCE(MAX(r.created_at), 0), COALESCE(MAX(r.finished_at), 0)) AS last_seen
                FROM singers s LEFT JOIN requests r ON r.singer_id = s.id
+               WHERE s.removed = 0
                GROUP BY s.id ORDER BY s.blocked, s.name COLLATE NOCASE"""
         )
+        cutoff = time.time() - active_hours * 3600
         return [
             {"id": r["id"], "name": r["name"], "blocked": bool(r["blocked"]),
-             "queued": r["queued"] or 0, "sung": r["sung"] or 0}
+             "queued": r["queued"] or 0, "sung": r["sung"] or 0,
+             "active": bool(r["queued"] or r["playing"] or r["last_seen"] >= cutoff)}
             for r in rows
         ]
+
+    def remove_singer(self, singer_id: int) -> bool:
+        """Take someone off the list: drop their waiting songs and sign their phone out.
+
+        They can join again (as a new singer) if they still have a working party link.
+        A song of theirs that's playing right now keeps playing; admins can skip it.
+        """
+        cur = self.db.execute(
+            "UPDATE singers SET removed=1, token=? WHERE id=? AND removed=0",
+            (f"removed-{secrets.token_urlsafe(24)}", singer_id),
+        )
+        if not cur.rowcount:
+            return False
+        self.db.execute(
+            "UPDATE requests SET status='removed', finished_at=? WHERE singer_id=? AND status='queued'",
+            (time.time(), singer_id),
+        )
+        self._changed()
+        return True
+
+    def new_night(self) -> None:
+        """Clear the queue, every singer and all history. Settings stay; the party
+        link changes so everyone scans in fresh."""
+        self.db.execute("DELETE FROM requests")
+        self.db.execute("DELETE FROM singers")
+        self.rotate_join_code()  # also notifies listeners
 
     def set_blocked(self, singer_id: int, blocked: bool) -> None:
         """Blocking also takes the singer's waiting songs out of the queue."""

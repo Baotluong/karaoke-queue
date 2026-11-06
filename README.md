@@ -38,6 +38,14 @@ python3 -m venv .venv
 - **Pair the TV** from the TV section of the admin page (TV: YouTube → Settings →
   Link with TV code). No terminal needed.
 
+- **Singers list:** people idle for 3+ hours are tucked under "Show older".
+  **Block** stops someone adding songs (tied to their phone's sign-in, not their
+  IP: everyone on your Wi-Fi shares one). **✕ Remove** drops their waiting songs
+  and signs their phone out; they can rejoin with a working party link, so pair it
+  with **New link** for someone unwelcome.
+- **New night** (admin page) clears the queue, singers and history, stops the
+  current song and makes a new party link. House rules are kept.
+
 ### Keeping strangers out
 
 - Every guest page needs the **party link** (the QR code). Without it people see

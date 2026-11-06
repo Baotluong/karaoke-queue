@@ -80,35 +80,63 @@ function render(state) {
   if (document.activeElement !== input) input.value = state.max_waiting;
 }
 
-function renderSingers(singers) {
-  const box = $("#singers");
-  box.replaceChildren(
-    ...singers.map((s) =>
-      el(
-        "div",
-        { class: "singer" + (s.blocked ? " blocked" : "") },
-        el(
-          "div",
-          { class: "meta" },
-          el("div", { class: "title" }, s.name),
-          el("div", { class: "sub" }, `${s.queued} waiting · ${s.sung} sung`),
-        ),
-        el(
-          "button",
-          {
-            class: s.blocked ? "" : "danger",
-            onclick: () => {
-              if (s.blocked || confirm(`Block ${s.name}? Their waiting songs will be removed.`)) {
-                act(`/api/admin/singers/${s.id}/block`, { body: JSON.stringify({ blocked: !s.blocked }) });
-              }
-            },
-          },
-          s.blocked ? "Unblock" : "Block",
-        ),
-      ),
+let showOlder = false;
+
+function singerRow(s) {
+  return el(
+    "div",
+    { class: "singer" + (s.blocked ? " blocked" : "") },
+    el(
+      "div",
+      { class: "meta" },
+      el("div", { class: "title" }, s.name),
+      el("div", { class: "sub" }, `${s.queued} waiting · ${s.sung} sung`),
+    ),
+    el(
+      "button",
+      {
+        class: s.blocked ? "" : "danger",
+        onclick: () => {
+          if (s.blocked || confirm(`Block ${s.name}? Their waiting songs will be removed and they can't add more.`)) {
+            act(`/api/admin/singers/${s.id}/block`, { body: JSON.stringify({ blocked: !s.blocked }) });
+          }
+        },
+      },
+      s.blocked ? "Unblock" : "Block",
+    ),
+    el(
+      "button",
+      {
+        class: "danger",
+        title: "Remove from the list",
+        onclick: () => {
+          if (confirm(`Remove ${s.name}? Their waiting songs are dropped and their phone is signed out. They can rejoin with the party link.`)) {
+            act(`/api/admin/singers/${s.id}`, { method: "DELETE" });
+          }
+        },
+      },
+      "✕",
     ),
   );
+}
+
+function renderSingers(singers) {
+  const box = $("#singers");
+  const active = singers.filter((s) => s.active);
+  const older = singers.filter((s) => !s.active);
+  box.replaceChildren(...active.map(singerRow));
   if (!singers.length) box.append(el("div", { class: "item empty" }, "No one has joined yet"));
+  else if (!active.length) box.append(el("div", { class: "item empty" }, "No one active right now"));
+  if (older.length) {
+    box.append(
+      el(
+        "button",
+        { class: "link-button", onclick: () => { showOlder = !showOlder; renderSingers(singers); } },
+        showOlder ? `Hide older singers (${older.length})` : `Show older singers (${older.length})`,
+      ),
+    );
+    if (showOlder) box.append(...older.map(singerRow));
+  }
 }
 
 function renderParty(p) {
@@ -164,6 +192,17 @@ $("#fair-turns").addEventListener("change", async (e) => {
 });
 
 $("#invite-btn").addEventListener("click", showInvite);
+
+$("#new-night").addEventListener("click", async () => {
+  if (!confirm("Start a new night? This clears the queue, every singer and all history, stops the current song, and makes a new party link. House rules are kept.")) return;
+  try {
+    renderParty(await api("/api/admin/new-night", { method: "POST" }));
+    flash("Fresh start! Share the new QR code.");
+    showInvite();
+  } catch (err) {
+    flash(err.message, true);
+  }
+});
 
 $("#new-link").addEventListener("click", async () => {
   if (!confirm("Make a new party link? Everyone will need to scan the new QR code to keep using the queue.")) return;
