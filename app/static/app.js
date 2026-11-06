@@ -104,6 +104,7 @@ function showJoined() {
   $("#add").hidden = !me;
   $("#me").textContent = me ? `as ${me.name}` : "";
   $("#q").placeholder = canSearch ? "Song or artist" : "Paste a YouTube link";
+  $("#mode-toggle").hidden = !canSearch;
 }
 
 async function loadState() {
@@ -126,6 +127,27 @@ $("#join-form").addEventListener("submit", async (e) => {
   await loadState();
 });
 
+// Karaoke (backing track, lyrics on screen) or Lyrics (original vocals + lyrics).
+let searchMode = localStorage.getItem("kq_search_mode") === "lyrics" ? "lyrics" : "karaoke";
+
+function renderMode() {
+  for (const b of document.querySelectorAll("#mode-toggle button")) {
+    b.setAttribute("aria-checked", String(b.dataset.mode === searchMode));
+  }
+}
+
+for (const b of document.querySelectorAll("#mode-toggle button")) {
+  b.addEventListener("click", () => {
+    if (b.dataset.mode === searchMode) return;
+    searchMode = b.dataset.mode;
+    localStorage.setItem("kq_search_mode", searchMode);
+    renderMode();
+    // Re-run the current search in the new mode.
+    if ($("#q").value.trim() && $("#results").children.length) $("#search-form").requestSubmit();
+  });
+}
+renderMode();
+
 $("#search-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const msg = $("#search-msg");
@@ -134,7 +156,9 @@ $("#search-form").addEventListener("submit", async (e) => {
   msg.textContent = "Searching…";
   list.replaceChildren();
   try {
-    const { results } = await api("/api/search?q=" + encodeURIComponent($("#q").value));
+    const { results } = await api(
+      `/api/search?mode=${searchMode}&q=` + encodeURIComponent($("#q").value),
+    );
     msg.textContent = results.length ? "" : "No results.";
     list.append(
       ...results.map((v) => {

@@ -37,6 +37,10 @@
       <input id="q" placeholder="Song or artist" autocomplete="off" required>
       <button>Search</button>
     </form>
+    <div id="mode-toggle" class="mode-toggle" role="radiogroup" aria-label="Search for">
+      <button type="button" role="radio" data-mode="karaoke">🎤 Karaoke</button>
+      <button type="button" role="radio" data-mode="lyrics">📝 Lyrics</button>
+    </div>
     <p id="closed" class="msg err" hidden>The host has paused new songs for now.</p>
     <p id="rules" class="msg"></p>
     <button id="alerts-btn" class="small" hidden>🔔 Notify me when it's my turn</button>

@@ -42,6 +42,7 @@ def extract_video_id(text: str) -> str | None:
     return candidate if candidate and _ID_RE.match(candidate) else None
 
 
+SEARCH_MODES = ("karaoke", "lyrics")
 CACHE_SECONDS = 6 * 60 * 60
 CACHE_MAX = 500
 
@@ -72,7 +73,9 @@ class Searcher:
             thumbnail=f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg",
         )
 
-    async def search(self, query: str, limit: int = 10) -> list[Video]:
+    async def search(self, query: str, limit: int = 10, mode: str = "karaoke") -> list[Video]:
+        """Search YouTube. `mode` adds "karaoke" (backing track, lyrics on screen) or
+        "lyrics" (original vocals with lyrics) unless the query already says one."""
         query = query.strip()
         if not query:
             return []
@@ -80,8 +83,10 @@ class Searcher:
             return [await self.lookup(vid)]
         if not self.api_key:
             raise SearchError("Search isn't set up yet. Paste a YouTube link instead.")
-        if "karaoke" not in query.lower():
-            query += " karaoke"
+        if mode not in SEARCH_MODES:
+            raise SearchError("Unknown search mode")
+        if not any(word in query.lower() for word in SEARCH_MODES):
+            query += f" {mode}"
         key = " ".join(query.lower().split())
         hit = self._cache.get(key)
         if hit and time.time() - hit[0] < CACHE_SECONDS:

@@ -12,6 +12,7 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 import aiohttp
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
@@ -226,10 +227,10 @@ def create_app(settings: Settings | None = None, screen: Screen | None = None) -
         return {"id": singer.id, "name": singer.name}
 
     @app.get("/api/search", dependencies=party)
-    async def search(q: str, request: Request):
+    async def search(q: str, request: Request, mode: Literal["karaoke", "lyrics"] = "karaoke"):
         limit(search_limit, request)
         try:
-            results = await app.state.searcher.search(q)
+            results = await app.state.searcher.search(q, mode=mode)
         except SearchError as exc:
             raise HTTPException(400, str(exc))
         return {"results": [r.__dict__ for r in results]}

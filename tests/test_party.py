@@ -238,3 +238,37 @@ async def test_search_results_are_cached():
     second = await s.search("  bohemian   RHAPSODY ")
     assert first == second and first[0].title == "Song & Co"
     assert calls == ["Bohemian Rhapsody karaoke"]  # YouTube asked once
+
+
+async def test_search_modes():
+    calls = []
+
+    class FakeResp:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            pass
+
+        async def json(self):
+            return {"items": []}
+
+    class FakeSession:
+        def get(self, url, params):
+            calls.append(params["q"])
+            return FakeResp()
+
+    s = Searcher("key", FakeSession())
+    await s.search("Dancing Queen")  # karaoke by default
+    await s.search("Dancing Queen", mode="lyrics")
+    # Already says what they want, so it's left alone (and is the same search as above).
+    await s.search("Dancing Queen lyrics", mode="karaoke")
+    await s.search("dancing queen", mode="lyrics")  # cached
+    assert calls == ["Dancing Queen karaoke", "Dancing Queen lyrics"]
+
+
+def test_search_api_mode(c):
+    scan_qr(c)
+    assert c.get("/api/search", params={"q": "x", "mode": "acapella"}).status_code == 422

@@ -117,3 +117,9 @@ dialog.invite .row button.go { background: var(--accent); color: #fff; }
 #alerts-btn { background: var(--line); color: var(--text); margin-bottom: 8px; }
 .singer button { padding: 6px 10px; font-size: 14px; }
 .link-button { background: none; color: var(--muted); font-size: 14px; font-weight: 500; text-decoration: underline; padding: 8px 0; }
+
+/* --- karaoke / lyrics search toggle ----------------------------------------- */
+.mode-toggle { display: inline-flex; margin-top: 8px; padding: 3px; gap: 2px; background: var(--card); border: 1px solid var(--line); border-radius: 99px; }
+.mode-toggle[hidden] { display: none; }
+.mode-toggle button { padding: 5px 12px; font-size: 13px; font-weight: 600; background: transparent; color: var(--muted); border-radius: 99px; }
+.mode-toggle button[aria-checked="true"] { background: var(--accent); color: #fff; }

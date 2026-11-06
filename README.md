@@ -8,7 +8,7 @@ the show, and the TV keeps its YouTube Premium status, so no ads mid-chorus.
 ![FastAPI](https://img.shields.io/badge/FastAPI-WebSockets-009688?logo=fastapi&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
 ![Cloudflare Tunnel](https://img.shields.io/badge/Cloudflare-Tunnel-F38020?logo=cloudflare&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-67%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-69%20passing-brightgreen)
 
 <table>
   <tr>
@@ -76,8 +76,9 @@ flowchart LR
 ## Features
 
 **For guests**
-- Scan the QR code, type a name, then search YouTube (it adds "karaoke"
-  automatically) or paste a link.
+- Scan the QR code, type a name, then search YouTube or paste a link. A
+  **🎤 Karaoke / 📝 Lyrics** toggle picks backing tracks (the default) or
+  original-vocal lyric videos.
 - See the live queue and your place in line. Remove your own songs.
 - **"You're up next" / "You're on!"** banner, tab title and vibration, with
   optional system notifications.
@@ -131,7 +132,7 @@ manual reordering is never undone.
 - **Live updates** over a WebSocket hub: every change in the queue, TV status or
   notices reaches every phone at once.
 - **Tested without a TV.** A `FakeScreen` implements the same interface as the real
-  TV, so the 67 tests cover the player, fairness rules, auth, rate limits and
+  TV, so the 69 tests cover the player, fairness rules, auth, rate limits and
   migrations deterministically. Each phase was also checked end to end in a real
   browser, through a real Cloudflare tunnel, and on a real TV.
 
@@ -192,7 +193,7 @@ the admin link it prints, log in with your PIN, and pair the TV under **TV**
 ## Development
 
 ```bash
-.venv/bin/pytest                    # 67 tests, no TV or network needed
+.venv/bin/pytest                    # 69 tests, no TV or network needed
 
 # Run with a pretend TV whose songs last 15 seconds
 KQ_FAKE_TV=1 KQ_FAKE_SONG_SECONDS=15 .venv/bin/python party.py --local
@@ -210,7 +211,7 @@ app/
   static/      Guest, admin and gate pages (vanilla JS)
 party.py       Starts server + tunnel and prints the QR code
 spike/         Phase 0: the ad-free experiment
-tests/         67 tests
+tests/         69 tests
 ```
 
 ## Build log
